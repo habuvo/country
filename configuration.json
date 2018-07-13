@@ -1,0 +1,31 @@
+{
+  "ExpireTime": 100,
+  "Providers": [ {
+    "PreReqURL": "https://ipapi.co/",
+    "PostReqURL": "/json/",
+    "KeysInResponce": ["country_name"],
+    "MaxReqPerMinute": 10
+  },
+    {
+    "PreReqURL": "http://geoip.nekudo.com/api/",
+    "PostReqURL": "/short",
+    "KeysInResponce": ["country", "name"],
+    "MaxReqPerMinute": 10
+
+  },
+    {
+      "PreReqURL": "http://ip-api.com/json/",
+      "PostReqURL": "",
+      "KeysInResponce": ["country"],
+      "MaxReqPerMinute": 10
+
+    },
+
+    {
+      "PreReqURL": "http://api.ipstack.com/",
+      "PostReqURL": "?access_key=c76218e3d1fb2c9d60c8d70c756ec6cd",
+      "KeysInResponce": ["country_name"],
+      "MaxReqPerMinute": 10
+    }
+  ]
+}
