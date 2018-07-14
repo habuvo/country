@@ -5,9 +5,8 @@ import (
 	"net/http"
 
 	"github.com/go-redis/redis"
-	"time"
-	"io/ioutil"
 	"encoding/json"
+	"time"
 )
 
 var (
@@ -55,57 +54,43 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	ipCountry, err := client.Get(ipString).Result()
 	if err == redis.Nil {
 		//key does not exist
-		//choose provider num
+		//request providers till success or quota limit
+		for {
+			numProvider = -1
+			for i := 0; i < len(config.Providers); i++ {
+				if checkProvider(i) == nil {
+					numProvider = i
+					break
+				}
+			}
 
-		numProvider = -1
-		for i := 0; i < len(config.Providers); i++ {
-			if checkProvider(i) == nil {
-				numProvider = i
+			log.Println("Provider # ", numProvider)
+
+			if numProvider == -1 {
+				http.Error(w, "quota exceeded on all providers", http.StatusInternalServerError)
+				return
+			}
+
+			//make request to provider
+			ipCountry, err = getInfo(ipString)
+			if err == nil {
+				log.Println("succefully got info from provider")
 				break
 			}
 		}
 
-		log.Println("Provider # ",numProvider)
-
-		if numProvider == -1 {
-			http.Error(w, "quota exceeded on all providers", http.StatusInternalServerError)
-			return
-		}
-
-		//make request to provider
-		rs, err := http.Get(config.Providers[numProvider].PreReqURL + ipString + config.Providers[numProvider].PostReqURL)
-		//process response
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		defer rs.Body.Close()
-
-		//commit successful take
-		config.Providers[numProvider].ReqTimes = append(config.Providers[numProvider].ReqTimes, time.Now())
-
-		bodyBytes, err := ioutil.ReadAll(rs.Body)
+		//save ip to DB
+		err = client.Set(ipString, ipCountry, time.Duration(config.ExpireTime)*time.Second).Err()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		ipCountry, err = parseResult(bodyBytes, numProvider)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	//save ip to DB
-	err = client.Set(ipString, ipCountry, time.Duration(config.ExpireTime)*time.Second).Err()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 
 	//return result
 	payload, _ := json.Marshal(struct {

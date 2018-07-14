@@ -12,6 +12,7 @@ import (
 	"github.com/go-redis/redis"
 	"sort"
 	"time"
+	"io/ioutil"
 )
 
 // GetClientIPHelper gets the client IP using a mixture of techniques.
@@ -180,4 +181,28 @@ func parseResult(raw []byte, num int) (country string, err error) {
 
 	return f.(string), nil
 
+}
+
+func getInfo(ip string) (country string, err error) {
+
+	rs, err := http.Get(config.Providers[numProvider].PreReqURL + ip + config.Providers[numProvider].PostReqURL)
+	//process response
+	if err != nil {
+		return
+	}
+	defer rs.Body.Close()
+
+	//commit successful take
+	config.Providers[numProvider].ReqTimes = append(config.Providers[numProvider].ReqTimes, time.Now())
+
+	bodyBytes, err := ioutil.ReadAll(rs.Body)
+	if err != nil {
+		return
+	}
+
+	country, err = parseResult(bodyBytes, numProvider)
+	if err != nil {
+		return
+	}
+	return
 }
