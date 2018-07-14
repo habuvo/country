@@ -4,28 +4,53 @@ import (
 	"testing"
 	"net/http"
 	"net/http/httptest"
-	"log"
+
 	"github.com/go-redis/redis"
 	"strconv"
+
+	. "gopkg.in/check.v1"
 )
 
-func TestHandler(t *testing.T) {
+// Hook up gocheck into the "go test" runner.
+func Test(t *testing.T) { TestingT(t) }
+
+type MySuite struct {
+	client *redis.Client
+	config Configuration
+}
+
+var _ = Suite(&MySuite{})
+
+func (s *MySuite) SetUpTest(c *C) {
 
 	var err error
 
-	config, err = GetConfiguration()
+	s.config, err = GetConfiguration()
 	if err != nil {
-		log.Fatal("Configuration read error : " + err.Error())
+		c.Fatalf("Configuration read error : " + err.Error())
 	}
 
-	client, err = RedisNewClient()
+	s.client, err = RedisNewClient()
 	if err != nil {
-		log.Fatal(err)
+		c.Fatalf(err.Error())
 	}
+}
+
+func (s *MySuite) TearDownTest(c *C) {
+
+	s.client.FlushDB()
+	s.client.Close()
+
+}
+
+func (s *MySuite) TestHandler(c *C) {
+
+	client = s.client
+	config = s.config
 
 	req, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
-		t.Fatal(err)
+		c.Fatal(err)
 	}
 
 	req.RemoteAddr = "8.8.8.8:8080"
@@ -35,59 +60,34 @@ func TestHandler(t *testing.T) {
 
 	handler.ServeHTTP(testRecorder, req)
 
-	if status := testRecorder.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
-	}
+	c.Assert(testRecorder.Code,Equals,http.StatusOK)
 
-	expected := `{"CountryName":"United States"}`
-	if testRecorder.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v",
-			testRecorder.Body.String(), expected)
-	}
+	c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"United States"}`)
 
 	ipCountry, err := client.Get("8.8.8.8").Result()
-	if err == redis.Nil {
-		t.Error("don't persist in Redis")
-	} else if err != nil {
-		t.Error("Redis error %v", err)
+	if err != nil {
+		c.Fatalf(err.Error())
 	}
 
-	if ipCountry != "United States" {
-		t.Errorf("handler returned unexpected result from Redis: got %v want %v", ipCountry, "United States")
-	}
-
-	client.FlushDB()
-	client.Close()
+	c.Assert(ipCountry,Equals,"United States")
 
 }
 
-func TestHandlerMass(t *testing.T) {
+func (s *MySuite) TestHandlerMass(c *C) {
 
-	var err error
-
-	config, err = GetConfiguration()
-	if err != nil {
-		log.Fatal("Configuration read error : " + err.Error())
-	}
-
-	config.Providers[0].MaxReqPerMinute = 2
-
-	client, err = RedisNewClient()
-	if err != nil {
-		log.Fatal(err)
-	}
+	client = s.client
+	config = s.config
 
 	req, err := http.NewRequest("GET", "/", nil)
 	if err != nil {
-		t.Fatal(err)
+		c.Fatal(err)
 	}
 
 	var addr string
 
 	for i := 0; i < 30; i++ {
 
-		addr = "8.8.8."+strconv.Itoa(i)
+		addr = "8.8.8." + strconv.Itoa(i)
 
 		req.Header.Set("Origin", "http://"+addr+":8080")
 
@@ -96,29 +96,16 @@ func TestHandlerMass(t *testing.T) {
 
 		handler.ServeHTTP(testRecorder, req)
 
-		if status := testRecorder.Code; status != http.StatusOK {
-			t.Errorf("handler returned wrong status code: got %v want %v",
-				status, http.StatusOK)
-		}
+		c.Assert(testRecorder.Code,Equals,http.StatusOK)
 
-		expected := `{"CountryName":"United States"}`
-		if testRecorder.Body.String() != expected {
-			t.Errorf("handler returned unexpected body: got %v want %v",
-				testRecorder.Body.String(), expected)
-		}
+		c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"United States"}`)
 
 		ipCountry, err := client.Get(addr).Result()
-		if err == redis.Nil {
-			t.Error("don't persist in Redis")
-		} else if err != nil {
-			t.Error("Redis error %v", err)
+		if err != nil {
+			c.Fatalf(err.Error())
 		}
 
-		if ipCountry != "United States" {
-			t.Errorf("handler returned unexpected result from Redis: got %v want %v", ipCountry, "United States")
-		}
+		c.Assert(ipCountry,Equals,"United States")
 	}
 
-	client.FlushDB()
-	client.Close()
 }
