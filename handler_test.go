@@ -17,9 +17,14 @@ func Test(t *testing.T) { TestingT(t) }
 type MySuite struct {
 	client *redis.Client
 	config Configuration
+	ip string
+	country string
 }
 
-var _ = Suite(&MySuite{})
+var _ = Suite(&MySuite{
+	ip : "8.8.1.",
+	country : "United States",
+})
 
 func (s *MySuite) SetUpTest(c *C) {
 
@@ -53,7 +58,7 @@ func (s *MySuite) TestHandler(c *C) {
 		c.Fatal(err)
 	}
 
-	req.RemoteAddr = "8.8.8.8:8080"
+	req.RemoteAddr = s.ip+"8:8080"
 
 	testRecorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(handler)
@@ -62,14 +67,14 @@ func (s *MySuite) TestHandler(c *C) {
 
 	c.Assert(testRecorder.Code,Equals,http.StatusOK)
 
-	c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"United States"}`)
+	c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"`+s.country+`"}`)
 
-	ipCountry, err := client.Get("8.8.8.8").Result()
+	ipCountry, err := client.Get(s.ip+"8").Result()
 	if err != nil {
 		c.Fatalf(err.Error())
 	}
 
-	c.Assert(ipCountry,Equals,"United States")
+	c.Assert(ipCountry,Equals,s.country)
 
 }
 
@@ -87,7 +92,7 @@ func (s *MySuite) TestHandlerMass(c *C) {
 
 	for i := 0; i < 30; i++ {
 
-		addr = "8.8.8." + strconv.Itoa(i)
+		addr = s.ip + strconv.Itoa(i)
 
 		req.Header.Set("Origin", "http://"+addr+":8080")
 
@@ -98,14 +103,14 @@ func (s *MySuite) TestHandlerMass(c *C) {
 
 		c.Assert(testRecorder.Code,Equals,http.StatusOK)
 
-		c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"United States"}`)
+		c.Assert(testRecorder.Body.String(),Equals,`{"CountryName":"`+s.country+`"}`)
 
 		ipCountry, err := client.Get(addr).Result()
 		if err != nil {
 			c.Fatalf(err.Error())
 		}
 
-		c.Assert(ipCountry,Equals,"United States")
+		c.Assert(ipCountry,Equals,s.country)
 	}
 
 }
